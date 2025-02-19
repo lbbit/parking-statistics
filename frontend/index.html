@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>停车数据统计</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid black; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+        .calendar div { padding: 10px; border: 1px solid black; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <h2>停车数据统计</h2>
+
+    <label>车位 ID：</label>
+    <select id="slot_id"></select>
+    
+    <label>视图：</label>
+    <select id="view">
+        <option value="day">日视图</option>
+        <option value="month">月视图</option>
+    </select>
+
+    <label>月份：</label>
+    <input type="month" id="month">
+
+    <button onclick="fetchData()">查询</button>
+
+    <div id="data-container"></div>
+
+    <script>
+        // **获取所有车位 ID**
+        function loadSlots() {
+            $.get("http://localhost:8000/get_slots/", function(response) {
+                let slotSelect = $("#slot_id");
+                slotSelect.empty();
+                
+                response.slots.forEach(slot => {
+                    slotSelect.append(`<option value="${slot}">${slot}</option>`);
+                });
+
+                // 选中第一个车位
+                if (response.slots.length > 0) {
+                    fetchData();
+                }
+            });
+        }
+
+        // **查询停车数据**
+        function fetchData() {
+            let slotId = $("#slot_id").val();
+            let view = $("#view").val();
+            let monthInput = $("#month").val();
+            
+            if (!monthInput) {
+                alert("请选择月份！");
+                return;
+            }
+
+            let [year, month] = monthInput.split("-");
+
+            $.get(`http://localhost:8000/get_data/?slot_id=${slotId}&view=${view}&year=${year}&month=${month}`, function(response) {
+                $("#data-container").empty();
+
+                if (view === "day") {
+                    let table = "<table><thead><tr><th>日期</th>";
+                    for (let i = 0; i < 24; i++) {
+                        table += `<th>${i} 时</th>`;
+                    }
+                    table += "</tr></thead><tbody>";
+
+                    response.data.forEach(row => {
+                        table += `<tr><td>${row.date}</td>`;
+                        for (let i = 0; i < 24; i++) {
+                            table += `<td>${row.hours[i] || 0}</td>`;
+                        }
+                        table += "</tr>";
+                    });
+
+                    table += "</tbody></table>";
+                    $("#data-container").html(table);
+                } 
+                else if (view === "month") {
+                    let calendar = '<div class="calendar">';
+                    let days = response.data.length;
+                    let firstDay = new Date(year, month - 1, 1).getDay();
+
+                    // 填充前面的空白格子
+                    for (let i = 0; i < firstDay; i++) {
+                        calendar += "<div></div>";
+                    }
+
+                    response.data.forEach(row => {
+                        calendar += `<div><strong>${row.date.split("-")[2]}</strong><br>停车小时: ${row.total_hours}</div>`;
+                    });
+
+                    calendar += "</div>";
+                    $("#data-container").html(calendar);
+                }
+            });
+        }
+
+        // **页面加载时获取车位 ID**
+        $(document).ready(function() {
+            loadSlots();
+        });
+    </script>
+
+</body>
+</html>
